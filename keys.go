@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// InitConfig is the JSON structure expected from the POST request to /
+// InitConfig is the JSON structure expected from the POST request
 type InitConfig struct {
 	SSHKeys []string     `json:"ssh_keys"`
 	Domain  DomainConfig `json:"domain,omitempty"`
@@ -26,15 +26,7 @@ type DomainConfig struct {
 	Name  string `json:"name"`
 }
 
-// GenesisConfig is stored separately and can be updated independently
-type GenesisConfig struct {
-	Content string `json:"genesis"`
-}
-
-const (
-	configFile  = "/etc/tdx-init/config.json"
-	genesisFile = "/etc/tdx-init/genesis.toml"
-)
+const configFile = "/etc/tdx-init/config.json"
 
 func waitForKey() {
 	// Check if LUKS container exists
@@ -161,48 +153,6 @@ func waitForKey() {
 		fmt.Fprint(w, "Configuration received and stored successfully")
 
 		close(done)
-	})
-
-	// Handler for genesis config (can be posted separately)
-	http.HandleFunc("/genesis", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			fmt.Fprint(w, "Only POST method is allowed")
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Error reading request: %v", err)
-			return
-		}
-
-		genesisContent := string(body)
-		if genesisContent == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, "Genesis content cannot be empty")
-			return
-		}
-
-		// Save genesis to file
-		if err := os.MkdirAll(filepath.Dir(genesisFile), 0755); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Could not create directory: %v", err)
-			log.Printf("Error creating genesis directory: %v", err)
-			return
-		}
-
-		if err := os.WriteFile(genesisFile, []byte(genesisContent), 0600); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Could not write genesis file: %v", err)
-			log.Printf("Error writing genesis file: %v", err)
-			return
-		}
-
-		log.Printf("Genesis config written to %s (%d bytes)", genesisFile, len(genesisContent))
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "Genesis configuration received and stored successfully")
 	})
 
 	srv := &http.Server{Addr: ":" + httpPort}
