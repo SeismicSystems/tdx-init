@@ -1,33 +1,35 @@
-# Extended tdx-init with JSON Config Support
+# Extended tdx-init with Multiple SSH Keys & Separate Genesis Config
 
-This fork adds support for POSTing JSON configuration data to port 8080, including:
-- SSH key
-- Certbot email and domain
-- Arbitrary custom data
+This fork adds support for:
+- **Multiple SSH keys** (array)
+- **Domain configuration** (certbot email and domain name)
+- **Separate genesis endpoint** for TOML configuration
 
 ## Changes Made
 
-1. **keys.go**: Extended HTTP handler to accept JSON POST with config data
-2. **passphrase.go**: Modified to embed full config in LUKS header
-3. Added `InitConfig` struct for structured configuration
+1. **keys.go**:
+   - Support for multiple SSH keys in `ssh_keys` array
+   - Structured `domain` object with `email` and `name`
+   - Separate `/genesis` endpoint for genesis TOML config
+2. **passphrase.go**: Embeds full config in LUKS header for persistence
 
 ## Usage
 
-### Option 1: JSON POST (New Method)
+### Step 1: POST SSH Keys and Domain Config
 
-Send a JSON payload with your config:
+Send initialization config to the main endpoint:
 
 ```bash
 curl -X POST http://<VM_IP>:8080 \
   -H "Content-Type: application/json" \
   -d '{
-    "ssh_key": "AAAAC3NzaC1lZDI1NTE5AAAAIMPdKdQZip5rYQAhuKTbhI09HM9aFSU...",
-    "certbot_email": "admin@example.com",
-    "domain": "genesis-node-1.example.com",
-    "custom_data": {
-      "environment": "production",
-      "region": "us-east-2",
-      "node_id": "1"
+    "ssh_keys": [
+      "AAAAC3NzaC1lZDI1NTE5AAAAIMPdKdQZip5rYQAhuKTbhI09HM9aFSU...",
+      "AAAAC3NzaC1lZDI1NTE5AAAAIG7J8xK9hXQwMVlBzMzBcNkK3xLhKk..."
+    ],
+    "domain": {
+      "email": "certbot@example.com",
+      "name": "genesis-node-1.example.com"
     }
   }'
 ```
@@ -40,68 +42,92 @@ curl -X POST http://<VM_IP>:8080 \
   -d @config.json
 ```
 
-### Option 2: Plain SSH Key (Legacy, Still Supported)
+### Step 2: POST Genesis Config (Optional, Separate Endpoint)
+
+POST your genesis file content to `/genesis`:
+
+```bash
+curl -X POST http://<VM_IP>:8080/genesis \
+  --data-binary @your-genesis-file.toml
+```
+
+### Legacy Support (Plain SSH Key)
+
+Still supported for backwards compatibility:
 
 ```bash
 curl -X POST -d "$(cut -d' ' -f2 ~/.ssh/id_ed25519.pub)" http://<VM_IP>:8080
 ```
 
-### What Gets Stored
+## What Gets Stored
 
-1. **SSH Key**: Written to `/etc/searcher_key` and `/home/searcher/.ssh/authorized_keys`
-2. **Full Config**: Saved to `/etc/tdx-init/config.json` (readable as JSON)
-3. **LUKS Header**: Both SSH key and full config embedded for persistence across reboots
+1. **SSH Keys**: All keys written to `/home/searcher/.ssh/authorized_keys`
+   - First key also written to `/etc/searcher_key` for container compatibility
+2. **Config**: Saved to `/etc/tdx-init/config.json`
+3. **Genesis**: Saved to `/etc/tdx-init/genesis.toml`
+4. **LUKS Header**: Config embedded for persistence across reboots
 
-### Accessing Config Data
+## Accessing Config Data
 
-After initialization, your config is available at:
-
+**Main config:**
 ```bash
 cat /etc/tdx-init/config.json
 ```
 
-Example output:
+Output:
 ```json
 {
-  "ssh_key": "AAAAC3NzaC1lZDI1NTE5AAAAIMPd...",
-  "certbot_email": "admin@example.com",
-  "domain": "genesis-node-1.example.com",
-  "custom_data": {
-    "environment": "production",
-    "region": "us-east-2",
-    "node_id": "1"
+  "ssh_keys": [
+    "AAAAC3NzaC1lZDI1NTE5AAAAIMPd...",
+    "AAAAC3NzaC1lZDI1NTE5AAAAIG7J..."
+  ],
+  "domain": {
+    "email": "certbot@example.com",
+    "name": "genesis-node-1.example.com"
   }
 }
 ```
 
-You can parse this in your scripts:
-
+**Genesis config:**
 ```bash
-# Get certbot email
-CERTBOT_EMAIL=$(jq -r '.certbot_email' /etc/tdx-init/config.json)
+cat /etc/tdx-init/genesis.toml
+```
 
-# Get domain
-DOMAIN=$(jq -r '.domain' /etc/tdx-init/config.json)
+**Parsing with jq:**
+```bash
+# Get domain email
+EMAIL=$(jq -r '.domain.email' /etc/tdx-init/config.json)
 
-# Get custom data
-NODE_ID=$(jq -r '.custom_data.node_id' /etc/tdx-init/config.json)
+# Get domain name
+DOMAIN=$(jq -r '.domain.name' /etc/tdx-init/config.json)
+
+# Get first SSH key
+FIRST_KEY=$(jq -r '.ssh_keys[0]' /etc/tdx-init/config.json)
+
+# Count SSH keys
+KEY_COUNT=$(jq '.ssh_keys | length' /etc/tdx-init/config.json)
 ```
 
 ## Integration with flashbots-images
 
-To use this fork in your builds, update `bob-common/mkosi.build`:
+Update `bob-common/mkosi.build`:
 
 ```bash
 make_git_package \
     "tdx-init" \
-    "your-branch-name" \
-    "https://github.com/your-org/tdx-init" \
+    "seismic-custom" \
+    "https://github.com/YOUR_USERNAME/tdx-init" \
     'go build -trimpath -ldflags "-s -w -buildid=" -o ./build/tdx-init' \
     "build/tdx-init:/usr/bin/tdx-init"
 ```
 
+## Endpoints
+
+- `POST /` - Initialize with SSH keys and domain config
+- `POST /genesis` - Upload genesis TOML configuration
+
 ## Backwards Compatibility
 
-- Old plain-text SSH key POSTs still work
-- Old LUKS headers with only "metadata" field are supported
-- New features are optional (certbot_email, domain, custom_data can be omitted)
+- Plain-text SSH key POSTs still work
+- Old LUKS headers with "metadata" field are supported
+- All new fields are optional

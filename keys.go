@@ -15,15 +15,26 @@ import (
 	"time"
 )
 
-// InitConfig is the JSON structure expected from the POST request
+// InitConfig is the JSON structure expected from the POST request to /
 type InitConfig struct {
-	SSHKey     string            `json:"ssh_key"`
-	CertbotEmail string          `json:"certbot_email,omitempty"`
-	Domain     string            `json:"domain,omitempty"`
-	CustomData map[string]string `json:"custom_data,omitempty"`
+	SSHKeys []string     `json:"ssh_keys"`
+	Domain  DomainConfig `json:"domain,omitempty"`
 }
 
-const configFile = "/etc/tdx-init/config.json"
+type DomainConfig struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+// GenesisConfig is stored separately and can be updated independently
+type GenesisConfig struct {
+	Content string `json:"genesis"`
+}
+
+const (
+	configFile  = "/etc/tdx-init/config.json"
+	genesisFile = "/etc/tdx-init/genesis.toml"
+)
 
 func waitForKey() {
 	// Check if LUKS container exists
@@ -42,31 +53,43 @@ func waitForKey() {
 			log.Fatalf("Error parsing token JSON: %v", err)
 		}
 
-		keyData, ok := token.UserData["ssh_key"]
+		// Extract config from token
+		configData, ok := token.UserData["config"]
 		if !ok {
 			// Fallback to old format for backwards compatibility
-			keyData, ok = token.UserData["metadata"]
+			keyData, ok := token.UserData["metadata"]
 			if !ok {
 				log.Fatalln("Error: No SSH key found in token")
 			}
+			// Old format - single key
+			writeKeys([]string{string(keyData)})
+			log.Printf("Key extracted from LUKS header (legacy format)")
+			return
 		}
 
-		// Write SSH key
-		writeKey(string(keyData))
-
-		// Write full config if it exists
-		if configData, ok := token.UserData["config"]; ok {
-			if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
-				log.Printf("Warning: Could not create config directory: %v", err)
-			}
-			if err := os.WriteFile(configFile, []byte(configData), 0600); err != nil {
-				log.Printf("Warning: Could not write config file: %v", err)
-			} else {
-				log.Printf("Config extracted and written to %s", configFile)
-			}
+		// New format - parse full config
+		var config InitConfig
+		if err := json.Unmarshal([]byte(configData), &config); err != nil {
+			log.Fatalf("Error parsing config from LUKS header: %v", err)
 		}
 
-		log.Printf("Key extracted from LUKS header and written to %s", keyFile)
+		// Write SSH keys
+		if len(config.SSHKeys) == 0 {
+			log.Fatalln("Error: No SSH keys found in config")
+		}
+		writeKeys(config.SSHKeys)
+
+		// Write full config to disk
+		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+			log.Printf("Warning: Could not create config directory: %v", err)
+		}
+		if err := os.WriteFile(configFile, []byte(configData), 0600); err != nil {
+			log.Printf("Warning: Could not write config file: %v", err)
+		} else {
+			log.Printf("Config extracted and written to %s", configFile)
+		}
+
+		log.Printf("%d SSH key(s) extracted from LUKS header", len(config.SSHKeys))
 		return
 	}
 
@@ -76,6 +99,7 @@ func waitForKey() {
 
 	done := make(chan struct{})
 
+	// Handler for SSH keys and domain config
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -98,22 +122,29 @@ func waitForKey() {
 			matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]{68}$`, key)
 			if !matched {
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprint(w, "Invalid format. Expected JSON with ssh_key field or plain base64-encoded OpenSSH ed25519 public key")
+				fmt.Fprint(w, "Invalid format. Expected JSON with ssh_keys array or plain base64-encoded OpenSSH ed25519 public key")
 				return
 			}
-			config.SSHKey = key
+			config.SSHKeys = []string{key}
 		} else {
-			// Validate SSH key from JSON
-			matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]{68}$`, config.SSHKey)
-			if !matched {
+			// Validate SSH keys from JSON
+			if len(config.SSHKeys) == 0 {
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprint(w, "Invalid ssh_key format, expected base64-encoded OpenSSH ed25519 public key")
+				fmt.Fprint(w, "ssh_keys array cannot be empty")
 				return
+			}
+			for i, key := range config.SSHKeys {
+				matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]{68}$`, key)
+				if !matched {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintf(w, "Invalid ssh_keys[%d] format, expected base64-encoded OpenSSH ed25519 public key", i)
+					return
+				}
 			}
 		}
 
-		// Write SSH key
-		writeKey(config.SSHKey)
+		// Write SSH keys
+		writeKeys(config.SSHKeys)
 
 		// Save full config to disk
 		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
@@ -132,6 +163,48 @@ func waitForKey() {
 		close(done)
 	})
 
+	// Handler for genesis config (can be posted separately)
+	http.HandleFunc("/genesis", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			fmt.Fprint(w, "Only POST method is allowed")
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Error reading request: %v", err)
+			return
+		}
+
+		genesisContent := string(body)
+		if genesisContent == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "Genesis content cannot be empty")
+			return
+		}
+
+		// Save genesis to file
+		if err := os.MkdirAll(filepath.Dir(genesisFile), 0755); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Could not create directory: %v", err)
+			log.Printf("Error creating genesis directory: %v", err)
+			return
+		}
+
+		if err := os.WriteFile(genesisFile, []byte(genesisContent), 0600); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Could not write genesis file: %v", err)
+			log.Printf("Error writing genesis file: %v", err)
+			return
+		}
+
+		log.Printf("Genesis config written to %s (%d bytes)", genesisFile, len(genesisContent))
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "Genesis configuration received and stored successfully")
+	})
+
 	srv := &http.Server{Addr: ":" + httpPort}
 	go srv.ListenAndServe()
 
@@ -146,7 +219,7 @@ func waitForKey() {
 
 var keyMu sync.Mutex
 
-func writeKey(key string) {
+func writeKeys(keys []string) {
 	keyMu.Lock()
 	defer keyMu.Unlock()
 
@@ -159,14 +232,17 @@ func writeKey(key string) {
 
 	// Write authorized_keys with correct permissions
 	authKeysFile := filepath.Join(sshDir, "authorized_keys")
-	f, err := os.OpenFile(authKeysFile, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(authKeysFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Fatalf("Error opening authorized_keys: %v", err)
 	}
 	defer f.Close()
 
-	if _, err := f.WriteString("no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 " + key + "\n"); err != nil {
-		log.Fatalf("Error writing to authorized_keys: %v", err)
+	// Write all keys to authorized_keys
+	for _, key := range keys {
+		if _, err := f.WriteString("no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 " + key + "\n"); err != nil {
+			log.Fatalf("Error writing to authorized_keys: %v", err)
+		}
 	}
 
 	// Set ownership of authorized_keys file
@@ -174,8 +250,10 @@ func writeKey(key string) {
 		log.Printf("Warning: Could not set ownership on authorized_keys: %v", err)
 	}
 
-	// Write to separate key file (still needed for the system)
-	if err := os.WriteFile(keyFile, []byte(key), 0600); err != nil {
+	// Write first key to separate key file (still needed for the container)
+	if err := os.WriteFile(keyFile, []byte(keys[0]), 0600); err != nil {
 		log.Fatalf("Error writing key file: %v", err)
 	}
+
+	log.Printf("Wrote %d SSH key(s) to authorized_keys", len(keys))
 }
