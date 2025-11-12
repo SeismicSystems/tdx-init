@@ -1,0 +1,11 @@
+{
+  "ssh_key": "AAAAC3NzaC1lZDI1NTE5AAAAIMPdKdQZip5rYQAhuKTbhI09HM9aFSU/erbUWXb4i4nR",
+  "certbot_email": "admin@example.com",
+  "domain": "genesis-node-1.example.com",
+  "custom_data": {
+    "environment": "production",
+    "region": "us-east-2",
+    "node_id": "1",
+    "any_other_key": "any_other_value"
+  }
+}
