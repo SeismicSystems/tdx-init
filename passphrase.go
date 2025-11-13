@@ -232,11 +232,15 @@ func copyConfigToPersistent() {
 			log.Printf("Warning: Could not create persistent config directory: %v", err)
 			return
 		}
-		if err := os.WriteFile(persistentConfigFile, configData, 0600); err != nil {
+		if err := os.WriteFile(persistentConfigFile, configData, 0644); err != nil {
 			log.Printf("Warning: Could not copy config to persistent storage: %v", err)
-		} else {
-			log.Printf("Config copied to %s", persistentConfigFile)
+			return
 		}
+		// Ensure file is readable by all users
+		if err := os.Chmod(persistentConfigFile, 0644); err != nil {
+			log.Printf("Warning: Could not set permissions on config file: %v", err)
+		}
+		log.Printf("Config copied to %s", persistentConfigFile)
 	}
 }
 

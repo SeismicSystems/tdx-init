@@ -38,15 +38,6 @@ const (
 	persistentConfigFile = "/persistent/conf/node.json"
 )
 
-// getConfigFile returns the config file path to use
-// Prefers persistent location, falls back to temp location
-func getConfigFile() string {
-	if _, err := os.Stat(persistentConfigFile); err == nil {
-		return persistentConfigFile
-	}
-	return tempConfigFile
-}
-
 func waitForKey() {
 	// Check if LUKS container exists
 	cmd := exec.Command("cryptsetup", "isLuks", devicePath)
