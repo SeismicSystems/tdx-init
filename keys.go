@@ -126,6 +126,7 @@ func waitForKey() {
 				return
 			}
 			config.SSHKeys = []string{key}
+			// Marshal for legacy format to ensure all fields are present
 			configJSON, _ = json.MarshalIndent(config, "", "  ")
 		} else {
 			// Validate SSH keys from JSON
@@ -142,7 +143,7 @@ func waitForKey() {
 					return
 				}
 			}
-			// Save the entire JSON payload as-is
+			// Save the raw JSON body to preserve all fields exactly as sent
 			configJSON = body
 		}
 
