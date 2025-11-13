@@ -136,17 +136,14 @@ func waitForKey() {
 			}
 		}
 
-		// Save the raw JSON body to preserve all fields exactly as sent
-		configJSON := body
-
 		// Write SSH keys
 		writeKeys(config.SSHKeys)
 
-		// Save full config to disk (entire JSON payload)
+		// Save raw JSON body to disk
 		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
 			log.Printf("Warning: Could not create config directory: %v", err)
 		}
-		if err := os.WriteFile(configFile, configJSON, 0600); err != nil {
+		if err := os.WriteFile(configFile, body, 0600); err != nil {
 			log.Printf("Warning: Could not write config file: %v", err)
 		} else {
 			log.Printf("Config written to %s", configFile)
