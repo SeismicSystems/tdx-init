@@ -18,8 +18,8 @@ import (
 // InitConfig is the JSON structure expected from the POST request
 type InitConfig struct {
 	SSHKeys []string     `json:"ssh_keys"`
-	Domain  DomainConfig `json:"domain,omitempty"`
-	Args    ArgsConfig   `json:"args,omitempty"`
+	Domain  DomainConfig `json:"domain"`
+	Args    ArgsConfig   `json:"args"`
 }
 
 type DomainConfig struct {
