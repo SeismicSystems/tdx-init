@@ -113,39 +113,31 @@ func waitForKey() {
 			return
 		}
 
-		// Try to parse as JSON first
+		// Parse JSON config
 		var config InitConfig
-		var configJSON []byte
 		if err := json.Unmarshal(body, &config); err != nil {
-			// Not JSON, try legacy plain text format (just SSH key)
-			key := string(body)
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Invalid JSON: %v", err)
+			return
+		}
+
+		// Validate SSH keys
+		if len(config.SSHKeys) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "ssh_keys array cannot be empty")
+			return
+		}
+		for i, key := range config.SSHKeys {
 			matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]{68}$`, key)
 			if !matched {
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprint(w, "Invalid format. Expected JSON with ssh_keys array or plain base64-encoded OpenSSH ed25519 public key")
+				fmt.Fprintf(w, "Invalid ssh_keys[%d] format, expected base64-encoded OpenSSH ed25519 public key", i)
 				return
 			}
-			config.SSHKeys = []string{key}
-			// Marshal for legacy format to ensure all fields are present
-			configJSON, _ = json.MarshalIndent(config, "", "  ")
-		} else {
-			// Validate SSH keys from JSON
-			if len(config.SSHKeys) == 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprint(w, "ssh_keys array cannot be empty")
-				return
-			}
-			for i, key := range config.SSHKeys {
-				matched, _ := regexp.MatchString(`^[A-Za-z0-9+/]{68}$`, key)
-				if !matched {
-					w.WriteHeader(http.StatusBadRequest)
-					fmt.Fprintf(w, "Invalid ssh_keys[%d] format, expected base64-encoded OpenSSH ed25519 public key", i)
-					return
-				}
-			}
-			// Save the raw JSON body to preserve all fields exactly as sent
-			configJSON = body
 		}
+
+		// Save the raw JSON body to preserve all fields exactly as sent
+		configJSON := body
 
 		// Write SSH keys
 		writeKeys(config.SSHKeys)
