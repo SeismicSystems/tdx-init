@@ -139,11 +139,18 @@ func waitForKey() {
 		// Write SSH keys
 		writeKeys(config.SSHKeys)
 
-		// Save raw JSON body to disk
+		// Re-marshal with nice indentation
+		formattedJSON, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			log.Printf("Warning: Could not format JSON: %v", err)
+			formattedJSON = body // Fallback to raw body
+		}
+
+		// Save formatted JSON to disk
 		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
 			log.Printf("Warning: Could not create config directory: %v", err)
 		}
-		if err := os.WriteFile(configFile, body, 0600); err != nil {
+		if err := os.WriteFile(configFile, formattedJSON, 0600); err != nil {
 			log.Printf("Warning: Could not write config file: %v", err)
 		} else {
 			log.Printf("Config written to %s", configFile)
