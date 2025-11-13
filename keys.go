@@ -19,11 +19,18 @@ import (
 type InitConfig struct {
 	SSHKeys []string     `json:"ssh_keys"`
 	Domain  DomainConfig `json:"domain,omitempty"`
+	Args    ArgsConfig   `json:"args,omitempty"`
 }
 
 type DomainConfig struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
+}
+
+type ArgsConfig struct {
+	Enclave string `json:"enclave"`
+	Reth    string `json:"reth"`
+	Summit  string `json:"summit"`
 }
 
 const configFile = "/etc/tdx-init/config.json"
