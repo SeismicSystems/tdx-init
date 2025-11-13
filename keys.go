@@ -108,6 +108,7 @@ func waitForKey() {
 
 		// Try to parse as JSON first
 		var config InitConfig
+		var configJSON []byte
 		if err := json.Unmarshal(body, &config); err != nil {
 			// Not JSON, try legacy plain text format (just SSH key)
 			key := string(body)
@@ -118,6 +119,7 @@ func waitForKey() {
 				return
 			}
 			config.SSHKeys = []string{key}
+			configJSON, _ = json.MarshalIndent(config, "", "  ")
 		} else {
 			// Validate SSH keys from JSON
 			if len(config.SSHKeys) == 0 {
@@ -133,16 +135,17 @@ func waitForKey() {
 					return
 				}
 			}
+			// Save the entire JSON payload as-is
+			configJSON = body
 		}
 
 		// Write SSH keys
 		writeKeys(config.SSHKeys)
 
-		// Save full config to disk
+		// Save full config to disk (entire JSON payload)
 		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
 			log.Printf("Warning: Could not create config directory: %v", err)
 		}
-		configJSON, _ := json.MarshalIndent(config, "", "  ")
 		if err := os.WriteFile(configFile, configJSON, 0600); err != nil {
 			log.Printf("Warning: Could not write config file: %v", err)
 		} else {
