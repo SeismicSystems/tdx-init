@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,6 +14,14 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+func generateRandomPassphrase() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random passphrase: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
+}
 
 func computeMAC(passphrase string, headerFile string) ([]byte, error) {
 	headerData, err := os.ReadFile(headerFile)
@@ -42,6 +52,16 @@ func setPassphrase() {
 	var passphrase string
 	fmt.Scanln(&passphrase)
 
+	initializeWithPassphrase(passphrase)
+}
+
+func initializeRandom() {
+	passphrase, err := generateRandomPassphrase()
+	if err != nil {
+		log.Fatalf("Error generating passphrase: %v", err)
+	}
+
+	log.Println("Automatically initializing disk with random passphrase...")
 	initializeWithPassphrase(passphrase)
 }
 
