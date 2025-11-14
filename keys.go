@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +39,14 @@ const (
 	tempConfigFile       = "/etc/tdx-init/config.json"
 	persistentConfigFile = "/persistent/conf/node.json"
 )
+
+func generateRandomPassphrase() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random passphrase: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
+}
 
 func waitForKey() {
 	// Check if LUKS container exists
@@ -162,7 +172,22 @@ func waitForKey() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "Configuration received and stored successfully")
 
-		close(done)
+		// Automatically initialize the disk with a random passphrase
+		go func() {
+			// Give a moment for the HTTP response to be sent
+			time.Sleep(100 * time.Millisecond)
+
+			// Generate random passphrase
+			passphrase, err := generateRandomPassphrase()
+			if err != nil {
+				log.Fatalf("Error generating passphrase: %v", err)
+			}
+
+			log.Println("Automatically initializing disk with random passphrase...")
+			initializeWithPassphrase(passphrase)
+
+			close(done)
+		}()
 	})
 
 	srv := &http.Server{Addr: ":" + httpPort}

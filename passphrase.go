@@ -38,6 +38,14 @@ func verifyMAC(passphrase string, headerFile string, expectedMAC []byte) error {
 }
 
 func setPassphrase() {
+	fmt.Print("Enter passphrase: ")
+	var passphrase string
+	fmt.Scanln(&passphrase)
+
+	initializeWithPassphrase(passphrase)
+}
+
+func initializeWithPassphrase(passphrase string) {
 	// Check if already mounted
 	if checkMounted() {
 		log.Fatalln("Error: Encrypted disk already setup")
@@ -56,10 +64,6 @@ func setPassphrase() {
 	// Check if LUKS container exists
 	cmd := exec.Command("cryptsetup", "isLuks", devicePath)
 	isNewSetup := cmd.Run() != nil
-
-	fmt.Print("Enter passphrase: ")
-	var passphrase string
-	fmt.Scanln(&passphrase)
 
 	if isNewSetup {
 		setupNewDisk(passphrase)
