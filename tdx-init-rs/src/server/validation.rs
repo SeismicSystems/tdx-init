@@ -1,4 +1,5 @@
 use crate::error::{Result, TdxInitError};
+use crate::config::ArgsConfig;
 use regex::Regex;
 
 const SSH_KEY_PATTERN: &str = r"^[A-Za-z0-9+/]{68}$";
@@ -20,5 +21,9 @@ pub fn validate_ssh_keys(keys: &[String]) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+pub fn validate_arguments(args: &ArgsConfig) -> Result<()> {
     Ok(())
 }
