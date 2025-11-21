@@ -36,7 +36,13 @@ pub fn validate_arguments(args: &ArgsConfig) -> Result<()> {
         validate_binary_args("summit", summit_args, &default_args.get_summit_flag_names())?;
     }
 
-    // Note: enclave args don't have default args to validate against currently
+    if let Some(enclave_args) = &args.enclave {
+        validate_binary_args(
+            "enclave",
+            enclave_args,
+            &default_args.get_enclave_flag_names(),
+        )?;
+    }
 
     Ok(())
 }

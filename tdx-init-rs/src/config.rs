@@ -51,6 +51,7 @@ pub struct LuksToken {
 pub struct DefaultArgs {
     pub seismic_reth: RethDefaultArgs,
     pub summit: SummitDefaultArgs,
+    pub enclave: EnclaveDefaultArgs,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +76,11 @@ pub struct SummitDefaultArgs {
     pub port_args: Vec<&'static str>,
     pub log_args: Vec<&'static str>,
     pub db_args: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnclaveDefaultArgs {
+    pub endpoint_args: Vec<&'static str>,
 }
 
 impl DefaultArgs {
@@ -136,6 +142,9 @@ impl DefaultArgs {
                 log_args: vec![],
                 db_args: vec!["--db-prefix", "quarts"],
             },
+            enclave: EnclaveDefaultArgs {
+                endpoint_args: vec!["--ip", "0.0.0.0", "--port", "7878"],
+            },
         }
     }
 
@@ -174,6 +183,19 @@ impl DefaultArgs {
 
     pub fn get_summit_flag_names(&self) -> Vec<&'static str> {
         self.get_all_summit_flags()
+            .into_iter()
+            .filter(|arg| arg.starts_with("--"))
+            .collect()
+    }
+
+    pub fn get_all_enclave_flags(&self) -> Vec<&'static str> {
+        let mut flags = Vec::new();
+        flags.extend(&self.enclave.endpoint_args);
+        flags
+    }
+
+    pub fn get_enclave_flag_names(&self) -> Vec<&'static str> {
+        self.get_all_enclave_flags()
             .into_iter()
             .filter(|arg| arg.starts_with("--"))
             .collect()
