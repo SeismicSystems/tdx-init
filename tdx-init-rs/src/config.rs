@@ -133,7 +133,7 @@ impl DefaultArgs {
                     "--prom-port",
                     "9090",
                 ],
-                log_args: vec!["--log-level", "info"],
+                log_args: vec![],
                 db_args: vec!["--db-prefix", "quarts"],
             },
         }
