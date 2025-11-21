@@ -7,14 +7,18 @@ use axum::{Json, extract::State, http::StatusCode, response::Response};
 
 pub async fn handle_config(
     State(state): State<AppState>,
-    Json(mut config): Json<InitConfig>,
+    Json(config): Json<InitConfig>,
 ) -> Result<Response> {
     validate_ssh_keys(&config.ssh_keys)?;
 
-    if let Some(ref mut log) = config.log {
-        log.validate_and_normalize()
-            .map_err(|e| crate::error::Error::ValidationError(e))?;
-    }
+    let config = InitConfig {
+        log: config
+            .log
+            .map(|log| log.validate_and_normalize())
+            .transpose()
+            .map_err(|e| crate::error::TdxInitError::ServerError(e))?,
+        ..config
+    };
 
     let mut sender_guard = state.config_sender.lock().await;
     if let Some(sender) = sender_guard.take() {

@@ -47,30 +47,37 @@ pub struct LogConfig {
 }
 
 impl LogConfig {
-    pub fn validate_and_normalize(&mut self) -> std::result::Result<(), String> {
-        fn process_field(value: &mut Option<String>) -> std::result::Result<(), String> {
-            if let Some(s) = value {
+    pub fn validate_and_normalize(self) -> std::result::Result<Self, String> {
+        let enclave = Self::process_field(self.enclave)?;
+        let reth = Self::process_field(self.reth)?;
+        let summit = Self::process_field(self.summit)?;
+
+        Ok(LogConfig {
+            enclave,
+            reth,
+            summit,
+        })
+    }
+
+    fn process_field(value: Option<String>) -> std::result::Result<Option<String>, String> {
+        match value {
+            Some(s) => {
                 let normalized = s.trim().to_lowercase();
                 if normalized.is_empty() {
-                    *value = None;
+                    Ok(None)
                 } else if matches!(
                     normalized.as_str(),
                     "trace" | "debug" | "info" | "warn" | "error"
                 ) {
-                    *value = Some(normalized);
+                    Ok(Some(normalized))
                 } else {
-                    return Err(format!(
+                    Err(format!(
                         "Invalid log level '{}'. Must be one of: trace, debug, info, warn, error",
                         s
-                    ));
+                    ))
                 }
             }
-            Ok(())
+            None => Ok(None),
         }
-
-        process_field(&mut self.enclave)?;
-        process_field(&mut self.reth)?;
-        process_field(&mut self.summit)?;
-        Ok(())
     }
 }
