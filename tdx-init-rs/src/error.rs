@@ -49,6 +49,18 @@ pub enum TdxInitError {
         "Invalid log level '{level}' for {binary}: must be one of trace, debug, info, warn, error"
     )]
     InvalidLogLevel { binary: String, level: String },
+
+    #[error("Machine ID not found")]
+    MachineIdNotFound,
+
+    #[error("Metadata fetch error: {0}")]
+    MetadataFetchError(String),
+
+    #[error("HTTP request error: {0}")]
+    Reqwest(#[from] reqwest::Error),
+
+    #[error("Missing salt in LUKS header")]
+    MissingSalt,
 }
 
 pub type Result<T> = std::result::Result<T, TdxInitError>;

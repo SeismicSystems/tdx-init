@@ -1,5 +1,5 @@
-use crate::config::InitConfig;
 use crate::error::{Result, TdxInitError};
+use crate::kdf;
 use crate::luks::{self, MAPPER_DEVICE};
 use crate::persistence;
 use crate::utils::{
@@ -7,8 +7,6 @@ use crate::utils::{
     file::{create_dir_with_perms, set_file_permissions, set_ownership},
     mac::{compute_mac, read_mac_from_device, verify_mac, write_mac_to_device},
 };
-use rand::Rng;
-use rand::distr::Alphanumeric;
 use std::path::PathBuf;
 use tokio::fs;
 use tracing::{info, warn};
@@ -16,15 +14,6 @@ use tracing::{info, warn};
 const MOUNT_POINT: &str = "/persistent";
 const KEY_FILE: &str = "/etc/searcher_key";
 const TEMP_CONFIG_FILE: &str = "/etc/tdx-init/config.json";
-
-pub fn generate_random_passphrase() -> Result<String> {
-    let passphrase = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect();
-    Ok(passphrase)
-}
 
 fn get_user_passphrase() -> Result<String> {
     print!("Enter passphrase: ");
@@ -129,7 +118,7 @@ async fn cleanup_mount() {
     luks::cleanup_header_file().await;
 }
 
-async fn setup_new_disk(device_path: PathBuf, passphrase: String) -> Result<()> {
+async fn setup_new_disk(device_path: PathBuf, passphrase: String, salt: &str) -> Result<()> {
     luks::cleanup_header_file().await;
 
     luks::format_luks_device(&device_path, &passphrase).await?;
@@ -144,7 +133,7 @@ async fn setup_new_disk(device_path: PathBuf, passphrase: String) -> Result<()> 
 
     let config_data = fs::read_to_string(TEMP_CONFIG_FILE).await.ok();
 
-    let token = luks::create_luks_token(&ssh_key, config_data).await?;
+    let token = luks::create_luks_token(&ssh_key, config_data, salt).await?;
 
     match luks::import_luks_token(&token).await {
         Ok(()) => (),
@@ -203,7 +192,8 @@ pub async fn set_passphrase(device_path: PathBuf) -> Result<()> {
     let passphrase = get_user_passphrase()?;
 
     if is_new_setup {
-        setup_new_disk(device_path, passphrase).await?;
+        let salt = kdf::generate_salt();
+        setup_new_disk(device_path, passphrase, &salt).await?;
         setup_mount_dirs().await?;
     } else {
         mount_existing_disk(device_path, passphrase).await?;
@@ -214,8 +204,7 @@ pub async fn set_passphrase(device_path: PathBuf) -> Result<()> {
 
 pub async fn initialize_with_passphrase(
     device_path: PathBuf,
-    passphrase: String,
-    _config: &InitConfig,
+    salt: &str,
 ) -> Result<()> {
     if is_mounted().await? {
         return Err(TdxInitError::AlreadyMounted);
@@ -223,8 +212,11 @@ pub async fn initialize_with_passphrase(
 
     let is_new_setup = !luks::is_luks_device(&device_path).await?;
 
+    // Derive passphrase from machine ID + salt
+    let passphrase = kdf::derive_passphrase(salt).await?;
+
     if is_new_setup {
-        setup_new_disk(device_path, passphrase).await?;
+        setup_new_disk(device_path, passphrase, salt).await?;
         setup_mount_dirs().await?;
     } else {
         mount_existing_disk(device_path, passphrase).await?;

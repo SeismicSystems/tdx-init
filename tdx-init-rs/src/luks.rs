@@ -84,10 +84,15 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
     .await
 }
 
-pub async fn create_luks_token(ssh_key: &str, config_data: Option<String>) -> Result<LuksToken> {
+pub async fn create_luks_token(
+    ssh_key: &str,
+    config_data: Option<String>,
+    salt: &str,
+) -> Result<LuksToken> {
     let mut user_data = HashMap::new();
     user_data.insert("ssh_key".to_string(), ssh_key.to_string());
     user_data.insert("metadata".to_string(), ssh_key.to_string());
+    user_data.insert("salt".to_string(), salt.to_string());
 
     if let Some(config_data) = config_data {
         user_data.insert("config".to_string(), config_data);
@@ -99,6 +104,15 @@ pub async fn create_luks_token(ssh_key: &str, config_data: Option<String>) -> Re
         keyslots: vec![],
         user_data,
     })
+}
+
+pub async fn extract_salt(device_path: &std::path::Path) -> Result<String> {
+    let token = extract_luks_token(device_path).await?;
+    token
+        .user_data
+        .get("salt")
+        .cloned()
+        .ok_or(TdxInitError::MissingSalt)
 }
 
 pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
