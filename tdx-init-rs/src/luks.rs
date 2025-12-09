@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
 use tokio::process::Command;
-use tracing::info;
+use tracing::{info, warn};
 
 pub const HEADER_FILE: &str = "/tmp/luks_header";
 pub const MAPPER_NAME: &str = "persistent";
