@@ -12,16 +12,39 @@ pub const MAPPER_NAME: &str = "persistent";
 pub const MAPPER_DEVICE: &str = "/dev/mapper/persistent";
 
 pub async fn is_luks_device(device_path: &std::path::Path) -> Result<bool> {
-    let cmd = Command::new("cryptsetup")
-        .arg("isLuks")
-        .arg(device_path.as_os_str())
-        .output()
-        .await
-        .map_err(|e| TdxInitError::CommandError {
-            cmd: "cryptsetup isLuks".to_string(),
-            stderr: e.to_string(),
-        })?;
-    Ok(cmd.status.success())
+    use tokio::time::{timeout, Duration};
+
+    info!("Checking if device is LUKS encrypted (with 60s timeout)...");
+    let check_timeout = Duration::from_secs(60);
+
+    let result = timeout(
+        check_timeout,
+        Command::new("cryptsetup")
+            .arg("isLuks")
+            .arg(device_path.as_os_str())
+            .output()
+    ).await;
+
+    match result {
+        Ok(Ok(output)) => {
+            let is_luks = output.status.success();
+            info!("LUKS check completed: is_luks={}", is_luks);
+            Ok(is_luks)
+        }
+        Ok(Err(e)) => {
+            warn!("cryptsetup isLuks command failed: {}", e);
+            Err(TdxInitError::CommandError {
+                cmd: "cryptsetup isLuks".to_string(),
+                stderr: e.to_string(),
+            })
+        }
+        Err(_) => {
+            warn!("⏱️  cryptsetup isLuks timed out after 60s - disk I/O is hanging!");
+            warn!("This suggests the io_timeout issue is affecting disk operations.");
+            warn!("Assuming device is NOT LUKS encrypted (will attempt to format it).");
+            Ok(false)  // Assume not LUKS if we can't check
+        }
+    }
 }
 
 pub async fn extract_config(device_path: &std::path::Path) -> Result<InitConfig> {
