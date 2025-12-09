@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::machine_id;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use hkdf::Hkdf;
 use sha2::Sha256;
 

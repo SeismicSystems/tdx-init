@@ -65,8 +65,14 @@ pub async fn extract_luks_token(device_path: &std::path::Path) -> Result<LuksTok
 }
 
 pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Result<()> {
-    info!("Formatting disk with LUKS2...");
-    execute_command_with_stdin(
+    info!("━━━ Formatting disk with LUKS2 ━━━");
+    info!("Device: {}", device_path.display());
+    info!("Header file: {}", HEADER_FILE);
+    info!("Payload alignment: 32769 sectors");
+    info!("Starting cryptsetup luksFormat...");
+    let start = std::time::Instant::now();
+
+    let result = execute_command_with_stdin(
         "cryptsetup",
         &[
             "luksFormat",
@@ -81,7 +87,21 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
         ],
         passphrase.as_bytes(),
     )
-    .await
+    .await;
+
+    let duration = start.elapsed();
+    match &result {
+        Ok(_) => info!(
+            "✓ LUKS format completed successfully in {:.2}s",
+            duration.as_secs_f64()
+        ),
+        Err(e) => warn!(
+            "❌ LUKS format failed after {:.2}s: {}",
+            duration.as_secs_f64(),
+            e
+        ),
+    }
+    result
 }
 
 pub async fn create_luks_token(
@@ -136,8 +156,13 @@ pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
 }
 
 pub async fn restore_header_to_device(device_path: &PathBuf) -> Result<()> {
-    info!("Writing header to disk...");
-    execute_command(
+    info!("━━━ Writing LUKS header to disk ━━━");
+    info!("Source header file: {}", HEADER_FILE);
+    info!("Target device: {}", device_path.display());
+    info!("Starting cryptsetup luksHeaderRestore...");
+    let start = std::time::Instant::now();
+
+    let result = execute_command(
         "cryptsetup",
         &[
             "luksHeaderRestore",
@@ -146,7 +171,21 @@ pub async fn restore_header_to_device(device_path: &PathBuf) -> Result<()> {
             HEADER_FILE,
         ],
     )
-    .await
+    .await;
+
+    let duration = start.elapsed();
+    match &result {
+        Ok(_) => info!(
+            "✓ Header restore completed in {:.2}s",
+            duration.as_secs_f64()
+        ),
+        Err(e) => warn!(
+            "❌ Header restore failed after {:.2}s: {}",
+            duration.as_secs_f64(),
+            e
+        ),
+    }
+    result
 }
 
 pub async fn backup_header_from_device(device_path: &PathBuf) -> Result<()> {
@@ -164,7 +203,14 @@ pub async fn backup_header_from_device(device_path: &PathBuf) -> Result<()> {
 }
 
 pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Result<()> {
-    execute_command_with_stdin(
+    info!("━━━ Opening LUKS container ━━━");
+    info!("Device: {}", device_path.display());
+    info!("Header file: {}", HEADER_FILE);
+    info!("Mapper name: {}", MAPPER_NAME);
+    info!("Starting cryptsetup open...");
+    let start = std::time::Instant::now();
+
+    let result = execute_command_with_stdin(
         "cryptsetup",
         &[
             "open",
@@ -175,7 +221,24 @@ pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Res
         ],
         passphrase.as_bytes(),
     )
-    .await
+    .await;
+
+    let duration = start.elapsed();
+    match &result {
+        Ok(_) => {
+            info!(
+                "✓ LUKS container opened successfully in {:.2}s",
+                duration.as_secs_f64()
+            );
+            info!("Mapped device available at: {}", MAPPER_DEVICE);
+        }
+        Err(e) => warn!(
+            "❌ Failed to open LUKS container after {:.2}s: {}",
+            duration.as_secs_f64(),
+            e
+        ),
+    }
+    result
 }
 
 pub async fn close_luks_container() -> Result<()> {
