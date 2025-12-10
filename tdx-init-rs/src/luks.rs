@@ -105,6 +105,7 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
             HEADER_FILE,
             "--align-payload",
             "32769",
+            "--use-urandom",
             "-q",
             device_path.to_str().unwrap(),
         ],
