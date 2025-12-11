@@ -7,10 +7,16 @@ pub async fn execute_command(cmd: &str, args: &[&str]) -> Result<()> {
 
     let output = Command::new(cmd).args(args).output().await?;
 
+    // Log stderr (contains debug output from cryptsetup)
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.is_empty() {
+        info!("Command stderr:\n{}", stderr);
+    }
+
     if !output.status.success() {
         return Err(TdxInitError::CommandError {
             cmd: format!("{} {}", cmd, args.join(" ")),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            stderr: stderr.to_string(),
         });
     }
 
@@ -35,10 +41,16 @@ pub async fn execute_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &[
 
     let output = child.wait_with_output().await?;
 
+    // Log stderr (contains debug output from cryptsetup)
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.is_empty() {
+        info!("Command stderr:\n{}", stderr);
+    }
+
     if !output.status.success() {
         return Err(TdxInitError::CommandError {
             cmd: format!("{} {}", cmd, args.join(" ")),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            stderr: stderr.to_string(),
         });
     }
 

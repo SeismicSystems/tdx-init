@@ -20,6 +20,8 @@ pub async fn is_luks_device(device_path: &std::path::Path) -> Result<bool> {
     let result = timeout(
         check_timeout,
         Command::new("cryptsetup")
+            .arg("-v")
+            .arg("--debug-json")
             .arg("isLuks")
             .arg(device_path.as_os_str())
             .output()
@@ -28,6 +30,13 @@ pub async fn is_luks_device(device_path: &std::path::Path) -> Result<bool> {
     match result {
         Ok(Ok(output)) => {
             let is_luks = output.status.success();
+
+            // Log stderr debug output
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.is_empty() {
+                info!("cryptsetup isLuks debug output:\n{}", stderr);
+            }
+
             info!("LUKS check completed: is_luks={}", is_luks);
             Ok(is_luks)
         }
@@ -71,6 +80,8 @@ pub async fn extract_config(device_path: &std::path::Path) -> Result<InitConfig>
 
 pub async fn extract_luks_token(device_path: &std::path::Path) -> Result<LuksToken> {
     let cmd = Command::new("cryptsetup")
+        .arg("-v")
+        .arg("--debug-json")
         .arg("token")
         .arg("export")
         .arg("--token-id")
@@ -98,6 +109,8 @@ pub async fn format_luks_device(device_path: &PathBuf, passphrase: &str) -> Resu
     let result = execute_command_with_stdin(
         "cryptsetup",
         &[
+            "-v",
+            "--debug-json",
             "luksFormat",
             "--type",
             "luks2",
@@ -166,6 +179,8 @@ pub async fn import_luks_token(token: &LuksToken) -> Result<()> {
     execute_command_with_stdin(
         "cryptsetup",
         &[
+            "-v",
+            "--debug-json",
             "token",
             "import",
             "--token-id",
@@ -189,6 +204,8 @@ pub async fn restore_header_to_device(device_path: &PathBuf) -> Result<()> {
     let result = execute_command(
         "cryptsetup",
         &[
+            "-v",
+            "--debug-json",
             "luksHeaderRestore",
             device_path.to_str().unwrap(),
             "--header-backup-file",
@@ -217,6 +234,8 @@ pub async fn backup_header_from_device(device_path: &PathBuf) -> Result<()> {
     execute_command(
         "cryptsetup",
         &[
+            "-v",
+            "--debug-json",
             "luksHeaderBackup",
             device_path.to_str().unwrap(),
             "--header-backup-file",
@@ -237,6 +256,8 @@ pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Res
     let result = execute_command_with_stdin(
         "cryptsetup",
         &[
+            "-v",
+            "--debug-json",
             "open",
             "--header",
             HEADER_FILE,
@@ -266,7 +287,7 @@ pub async fn open_luks_container(device_path: &PathBuf, passphrase: &str) -> Res
 }
 
 pub async fn close_luks_container() -> Result<()> {
-    execute_command("cryptsetup", &["close", MAPPER_NAME]).await
+    execute_command("cryptsetup", &["-v", "--debug-json", "close", MAPPER_NAME]).await
 }
 
 pub async fn cleanup_header_file() {
