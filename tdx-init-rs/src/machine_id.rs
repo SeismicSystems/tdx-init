@@ -4,7 +4,8 @@ use tokio::fs;
 use tracing::info;
 
 const GCP_METADATA_URL: &str = "http://metadata.google.internal/computeMetadata/v1/instance/id";
-const AZURE_METADATA_URL: &str = "http://169.254.169.254/metadata/instance/compute/vmId?api-version=2021-02-01&format=text";
+const AZURE_METADATA_URL: &str =
+    "http://169.254.169.254/metadata/instance/compute/vmId?api-version=2021-02-01&format=text";
 const MACHINE_ID_PATH: &str = "/etc/machine-id";
 const PRODUCT_UUID_PATH: &str = "/sys/class/dmi/id/product_uuid";
 

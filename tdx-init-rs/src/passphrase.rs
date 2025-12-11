@@ -202,10 +202,7 @@ pub async fn set_passphrase(device_path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub async fn initialize_with_passphrase(
-    device_path: PathBuf,
-    salt: &str,
-) -> Result<()> {
+pub async fn initialize_with_passphrase(device_path: PathBuf, salt: &str) -> Result<()> {
     if is_mounted().await? {
         return Err(TdxInitError::AlreadyMounted);
     }
