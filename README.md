@@ -1,5 +1,9 @@
 # tdx-init
 
+> [!WARNING]
+> **Deprecated — this repository has moved.** `tdx-init` now lives in the
+> [enclave repo](https://github.com/SeismicSystems/enclave/tree/seismic/crates/tdx-init).
+
 Small HTTP service that receives node configuration on every boot of a
 Seismic TDX VM and translates it into per-service config files under
 `/run/seismic/conf/` (tmpfs) for downstream services to consume.
